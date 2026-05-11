@@ -1,0 +1,78 @@
+{
+  "CTkFont": {
+    "macOS": {
+      "family": "Helvetica",
+      "size": 13,
+      "weight": "normal"
+    },
+    "Windows": {
+      "family": "Helvetica",
+      "size": 13,
+      "weight": "normal"
+    },
+    "Linux": {
+      "family": "Helvetica",
+      "size": 13,
+      "weight": "normal"
+    }
+  },
+  "CTk": {
+    "fg_color": ["#D9DAD3", "#D9DAD3"]
+  },
+  "CTkToplevel": {
+    "fg_color": ["#D9DAD3", "#D9DAD3"]
+  },
+  "CTkFrame": {
+    "corner_radius": 20,
+    "border_width": 0,
+    "fg_color": ["#F4F5EF", "#F4F5EF"],
+    "top_fg_color": ["#F4F5EF", "#F4F5EF"],
+    "border_color": ["#C0C1BC", "#C0C1BC"]
+  },
+  "CTkButton": {
+    "corner_radius": 25,
+    "border_width": 0,
+    "fg_color": ["#457297", "#457297"],
+    "hover_color": ["#576193", "#576193"],
+    "border_color": ["#FFFFFF", "#FFFFFF"],
+    "text_color": ["#FFFFFF", "#FFFFFF"],
+    "text_color_disabled": ["#9E9F9A", "#9E9F9A"]
+  },
+  "CTkLabel": {
+    "corner_radius": 0,
+    "fg_color": ["transparent", "transparent"],
+    "text_color": ["#2C2D28", "#2C2D28"]
+  },
+  "CTkEntry": {
+    "corner_radius": 10,
+    "border_width": 1,
+    "fg_color": ["#FFFFFF", "#FFFFFF"],
+    "border_color": ["#A1A29D", "#A1A29D"],
+    "text_color": ["#2C2D28", "#2C2D28"],
+    "placeholder_text_color": ["#7B7C77", "#7B7C77"]
+  },
+  "CTkTextbox": {
+    "corner_radius": 10,
+    "border_width": 1,
+    "fg_color": ["#FFFFFF", "#FFFFFF"],
+    "border_color": ["#A1A29D", "#A1A29D"],
+    "text_color": ["#2C2D28", "#2C2D28"],
+    "scrollbar_button_color": ["#D9DAD3", "#D9DAD3"],
+    "scrollbar_button_hover_color": ["#C0C1BC", "#C0C1BC"]
+  },
+  "CTkScrollbar": {
+    "corner_radius": 10,
+    "border_width": 0,
+    "border_spacing": 4,
+    "fg_color": ["transparent", "transparent"],
+    "button_color": ["#D9DAD3", "#D9DAD3"],
+    "button_hover_color": ["#C0C1BC", "#C0C1BC"]
+  },
+  "CTkProgressBar": {
+    "corner_radius": 6,
+    "border_width": 0,
+    "fg_color": ["#FFFFFF", "#FFFFFF"],
+    "progress_color": ["#B77849", "#B77849"],
+    "border_color": ["#B77849", "#B77849"]
+  }
+}

@@ -1,0 +1,739 @@
+﻿===== Dump de arquivos do projeto Python =====
+##### Arquivo: auth.py #####
+import psycopg2
+import hashlib
+
+# ==========================================
+# CONFIGURAÇÕES DO BANCO DE DADOS
+# Altere estes valores de acordo com o seu PostgreSQL
+# ==========================================
+DB_HOST = "localhost"  # Ou o IP do seu servidor se estiver na nuvem
+DB_PORT = "5432"  # Porta padrão do Postgres
+DB_NAME = "postgres"  # Nome do banco de dados que você criou
+DB_USER = "postgres"  # Seu usuário do Postgres
+DB_PASS = "pedrozanella123"  # Sua senha do Postgres
+
+
+def conectar():
+    """Cria a conexão com o banco de dados PostgreSQL."""
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS
+        )
+        return conn
+    except Exception as e:
+        print(f"Erro ao conectar ao banco de dados: {e}")
+        return None
+
+
+def hash_senha(senha):
+    """Criptografa a senha para não salvá-la em texto puro."""
+    return hashlib.sha256(senha.encode()).hexdigest()
+
+
+def salvar_usuario(usuario, senha):
+    """Tenta inserir um novo usuário no banco de dados."""
+    conn = conectar()
+    if not conn:
+        return False, "Erro de conexão com o servidor."
+
+    cursor = conn.cursor()
+    senha_criptografada = hash_senha(senha)
+
+    try:
+        # O '%s' protege o banco contra ataques de injeção de SQL no psycopg2
+        cursor.execute(
+            "INSERT INTO usuarios (usuario, senha_hash) VALUES (%s, %s)",
+            (usuario, senha_criptografada)
+        )
+        conn.commit()
+        sucesso = True
+        msg = "Cadastro realizado com sucesso!"
+    except psycopg2.errors.UniqueViolation:
+        # Erro específico do Postgres quando tentamos duplicar um valor UNIQUE
+        conn.rollback()
+        sucesso = False
+        msg = "Usuário já existe!"
+    except Exception as e:
+        conn.rollback()
+        sucesso = False
+        msg = f"Erro ao cadastrar: {e}"
+    finally:
+        cursor.close()
+        conn.close()
+
+    return sucesso, msg
+
+
+def validar_login(usuario, senha):
+    """Verifica se o usuário e a senha existem no banco."""
+    conn = conectar()
+    if not conn:
+        return False
+
+    cursor = conn.cursor()
+    senha_criptografada = hash_senha(senha)
+
+    try:
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE usuario = %s AND senha_hash = %s",
+            (usuario, senha_criptografada)
+        )
+        resultado = cursor.fetchone()
+        return resultado is not None
+    except Exception as e:
+        print(f"Erro na validação do login: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+##### Arquivo: main.py #####
+import sys
+import customtkinter as ctk
+
+class FalsoTerminal:
+    def write(self, *args, **kwargs): pass
+    def flush(self, *args, **kwargs): pass
+    def isatty(self): return False
+    def read(self, *args, **kwargs): return ""
+    def readline(self, *args, **kwargs): return ""
+
+if sys.stdout is None: sys.stdout = FalsoTerminal()
+if sys.stderr is None: sys.stderr = FalsoTerminal()
+if sys.stdin is None:  sys.stdin = FalsoTerminal()
+
+from telas.tela_selecao import TelaSelecao
+from telas.tela_login import TelaLogin
+from telas.tela_configuracao import TelaConfiguracao
+from telas.tela_progresso import TelaProgresso
+
+ctk.set_default_color_theme("tema_artemis.json")
+ctk.set_appearance_mode("light")
+
+class MainApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Resk Artemis")
+        self.geometry("700x850")
+
+        # ==========================================
+        # ÍCONE DO APLICATIVO (.ico)
+        # ==========================================
+        try:
+            self.iconbitmap("assets/resk.ico")
+        except Exception as e:
+            print(f"Aviso: Ícone não encontrado. Erro: {e}")
+
+        self.dados_redutor = {
+            "servico": None, "email": "", "senha": "", "pasta": ""
+        }
+
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.pack(fill="both", expand=True)
+        self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_columnconfigure(0, weight=1)
+
+        self.frames = {}
+
+        for F in (TelaSelecao, TelaLogin, TelaConfiguracao, TelaProgresso):
+            nome_pagina = F.__name__
+            frame = F(parent=self.container, controller=self)
+            self.frames[nome_pagina] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
+
+        self.mostrar_tela("TelaSelecao")
+
+    def mostrar_tela(self, nome_pagina):
+        frame = self.frames[nome_pagina]
+        if hasattr(frame, "ao_mostrar"):
+            frame.ao_mostrar()
+        frame.tkraise()
+
+if __name__ == "__main__":
+    app = MainApp()
+    app.mainloop()
+
+##### Arquivo: telas\__init__.py #####
+
+##### Arquivo: telas\tela_configuracao.py #####
+import customtkinter as ctk
+import tkinter.filedialog as filedialog
+from utils import validar_permissao_escrita
+
+
+class TelaConfiguracao(ctk.CTkFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.configure(fg_color="transparent")
+
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkButton(self, text="← Voltar", width=60, fg_color="transparent", hover_color="#C0C1BC",
+                      text_color="#2C2D28",
+                      font=("Helvetica", 14), command=lambda: self.controller.mostrar_tela("TelaLogin")).place(x=30, y=30)
+
+        # ==========================================
+        # CARD PRINCIPAL (Container)
+        # ==========================================
+        card = ctk.CTkFrame(self, width=500, height=500)
+        card.grid(row=1, column=0)
+        card.pack_propagate(False)
+
+        # Título principal isolado e alinhado no topo
+        ctk.CTkLabel(card, text="Onde guardar?", font=("Helvetica", 32, "bold")).pack(pady=(50, 10))
+        ctk.CTkLabel(card, text="Escolha a pasta local para salvar os arquivos.", font=("Helvetica", 14),
+                     text_color="#7B7C77").pack(pady=(0, 40))
+
+        self.frame_pasta = ctk.CTkFrame(card, fg_color="#FFFFFF", border_width=1, border_color="#A1A29D",
+                                        corner_radius=10, width=400, height=55)
+        self.frame_pasta.pack(pady=10)
+        self.frame_pasta.pack_propagate(False)
+
+        self.label_pasta_atual = ctk.CTkLabel(self.frame_pasta, text=" Nenhuma pasta selecionada",
+                                              font=("Helvetica", 14), text_color="#7B7C77")
+        self.label_pasta_atual.pack(side="left", padx=15, pady=12)
+
+        ctk.CTkButton(card, text="Procurar Pasta", width=220, height=45, fg_color="#C0C1BC", hover_color="#A1A29D",
+                      text_color="#2C2D28",
+                      font=("Helvetica", 14, "bold"), command=self.escolher_pasta).pack(pady=15)
+
+        self.label_erro = ctk.CTkLabel(card, text="", text_color="#935A5E", font=("Helvetica", 12))
+        self.label_erro.pack(pady=5)
+
+        ctk.CTkButton(card, text="Iniciar Resk", width=340, height=60, font=("Helvetica", 16, "bold"),
+                      command=self.avancar).pack(pady=(20, 20))
+
+    def escolher_pasta(self):
+        pasta = filedialog.askdirectory(title="Escolha onde guardar as fotos reduzidas", mustexist=True)
+        if not pasta: return
+        if not validar_permissao_escrita(pasta):
+            self.label_erro.configure(text="Sem permissão de escrita nesta pasta.")
+            return
+
+        self.label_erro.configure(text="")
+        self.controller.dados_redutor["pasta"] = pasta
+        texto_exibido = pasta if len(pasta) < 40 else f"...{pasta[-37:]}"
+        self.label_pasta_atual.configure(text=texto_exibido, text_color="#2C2D28")
+
+    def avancar(self):
+        if not self.controller.dados_redutor.get("pasta"):
+            self.label_erro.configure(text="Escolha uma pasta de destino antes de avançar!")
+            return
+        self.controller.mostrar_tela("TelaProgresso")
+
+##### Arquivo: telas\tela_login.py #####
+import customtkinter as ctk
+
+
+class TelaLogin(ctk.CTkFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.configure(fg_color="transparent")
+
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # Botão de voltar mais discreto e moderno
+        ctk.CTkButton(self, text="← Voltar", width=60, fg_color="transparent", hover_color="#C0C1BC",
+                      text_color="#2C2D28",
+                      font=("Helvetica", 14), command=lambda: self.controller.mostrar_tela("TelaSelecao")).place(x=30,
+                                                                                                                 y=30)
+
+        card = ctk.CTkFrame(self, width=450, height=500)
+        card.grid(row=1, column=0)
+        card.pack_propagate(False)
+
+        ctk.CTkLabel(card, text="Autenticação Segura", font=("Helvetica", 14), text_color="#7B7C77").pack(pady=(50, 0))
+        self.label_titulo = ctk.CTkLabel(card, text="Login", font=("Helvetica", 32, "bold"))
+        self.label_titulo.pack(pady=(5, 30))
+
+        # Campos de texto um pouco mais altos (height=50) para um toque premium
+        self.entry_usuario = ctk.CTkEntry(card, placeholder_text="Endereço de e-mail", width=340, height=50)
+        self.entry_usuario.pack(pady=(10, 15))
+
+        self.entry_senha = ctk.CTkEntry(card, placeholder_text="Palavra-passe", show="•", width=340, height=50)
+        self.entry_senha.pack(pady=(0, 5))
+
+        self.label_mensagem = ctk.CTkLabel(card, text="", text_color="#935A5E", font=("Helvetica", 12))
+        self.label_mensagem.pack(pady=5)
+
+        ctk.CTkButton(card, text="Continuar", width=340, height=55, font=("Helvetica", 16, "bold"),
+                      command=self.avancar).pack(pady=(15, 20))
+
+    def ao_mostrar(self):
+        servico = self.controller.dados_redutor.get("servico", "Serviço")
+        self.label_titulo.configure(text=f"{servico}")
+        self.label_mensagem.configure(text="")
+
+    def avancar(self):
+        email = self.entry_usuario.get().strip()
+        senha = self.entry_senha.get()
+        if not email or not senha:
+            self.label_mensagem.configure(text="Por favor, preencha todos os campos.")
+            return
+
+        self.controller.dados_redutor["email"] = email
+        self.controller.dados_redutor["senha"] = senha
+        self.controller.mostrar_tela("TelaConfiguracao")
+
+##### Arquivo: telas\tela_progresso.py #####
+import os
+import threading
+import customtkinter as ctk
+from PIL import Image
+from pyicloud import PyiCloudService
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from utils import RAWPY_DISPONIVEL, ler_bytes_do_download, abrir_imagem_universal
+
+
+class TelaProgresso(ctk.CTkFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.configure(fg_color="transparent")
+
+        self.evento_pausa = threading.Event()
+        self.evento_pausa.set()
+        self.flag_cancelar = False
+
+        self.botao_voltar = ctk.CTkButton(self, text="← Voltar ao Início", width=60, fg_color="transparent",
+                                          hover_color="#C0C1BC", text_color="#2C2D28",
+                                          font=("Helvetica", 14), command=self.voltar_inicio, state="disabled")
+        self.botao_voltar.pack(anchor="nw", padx=30, pady=30)
+
+        card = ctk.CTkFrame(self)
+        card.pack(fill="both", expand=True, padx=50, pady=(0, 50))
+
+        # ==========================================
+        # CONTADORES NO CANTO SUPERIOR DIREITO
+        # ==========================================
+        self.frame_stats = ctk.CTkFrame(card, fg_color="transparent")
+        # Fixando no topo direito (anchor="ne") com margens internas (x e y)
+        self.frame_stats.place(relx=1.0, rely=0.0, anchor="ne", x=-40, y=40)
+
+        self.frame_stats.grid_columnconfigure((0, 1, 2), weight=1)
+
+        # REDE
+        self.label_titulo_rede = ctk.CTkLabel(self.frame_stats, text="REDE", font=("Helvetica", 11, "bold"),
+                                              text_color="#7B7C77")
+        self.label_titulo_rede.grid(row=0, column=0, padx=15, sticky="e")
+        self.label_valor_rede = ctk.CTkLabel(self.frame_stats, text="0.0 Mb/s", font=("Helvetica", 14, "bold"),
+                                             text_color="#2C2D28")
+        self.label_valor_rede.grid(row=1, column=0, padx=15, sticky="e")
+
+        # MÁXIMA
+        self.label_titulo_maxima = ctk.CTkLabel(self.frame_stats, text="MÁXIMA", font=("Helvetica", 11, "bold"),
+                                                text_color="#7B7C77")
+        self.label_titulo_maxima.grid(row=0, column=1, padx=15, sticky="e")
+        self.label_valor_maxima = ctk.CTkLabel(self.frame_stats, text="0.0 Mb/s", font=("Helvetica", 14, "bold"),
+                                               text_color="#2C2D28")
+        self.label_valor_maxima.grid(row=1, column=1, padx=15, sticky="e")
+
+        # ARMAZENAMENTO
+        self.label_titulo_armazenamento = ctk.CTkLabel(self.frame_stats, text="ARMAZENAMENTO",
+                                                       font=("Helvetica", 11, "bold"), text_color="#7B7C77")
+        self.label_titulo_armazenamento.grid(row=0, column=2, padx=15, sticky="e")
+        self.label_valor_armazenamento = ctk.CTkLabel(self.frame_stats, text="0.0 Mb/s", font=("Helvetica", 14, "bold"),
+                                                      text_color="#2C2D28")
+        self.label_valor_armazenamento.grid(row=1, column=2, padx=15, sticky="e")
+
+        # ==========================================
+        # ELEMENTOS CENTRAIS (Limpos e alinhados)
+        # ==========================================
+
+        # Aumentamos o pady superior para compensar a remoção do "Status do Resk"
+        self.label_titulo = ctk.CTkLabel(card, text="Otimizando", font=("Helvetica", 32, "bold"))
+        self.label_titulo.pack(pady=(70, 5))
+
+        self.label_status = ctk.CTkLabel(card, text="A preparar o ambiente...", font=("Helvetica", 14),
+                                         text_color="#7B7C77")
+        self.label_status.pack(pady=(0, 20))
+
+        self.label_porcentagem = ctk.CTkLabel(card, text="0.00%", font=("Helvetica", 48, "bold"), text_color="#B77849")
+        self.label_porcentagem.pack(pady=(15, 0))
+
+        self.barra_progresso = ctk.CTkProgressBar(card, width=480, height=14)
+        self.barra_progresso.pack(pady=(20, 30))
+        self.barra_progresso.set(0)
+
+        self.frame_botoes = ctk.CTkFrame(card, fg_color="transparent")
+        self.frame_botoes.pack(pady=10)
+
+        self.botao_pausar = ctk.CTkButton(self.frame_botoes, text="Pausar", width=140, height=45,
+                                          fg_color="#C0C1BC", hover_color="#A1A29D", text_color="#2C2D28",
+                                          font=("Helvetica", 14, "bold"),
+                                          command=self.pausar_retomar)
+        self.botao_pausar.grid(row=0, column=0, padx=15)
+
+        self.botao_cancelar = ctk.CTkButton(self.frame_botoes, text="Cancelar", width=140, height=45,
+                                            fg_color="#935A5E", hover_color="#7A4B4E", text_color="#FFFFFF",
+                                            font=("Helvetica", 14, "bold"),
+                                            command=self.cancelar_processo)
+        self.botao_cancelar.grid(row=0, column=1, padx=15)
+
+        self.caixa_log = ctk.CTkTextbox(card, width=520, height=180, font=("Courier", 12))
+        self.caixa_log.pack(pady=30)
+
+    # =============== LÓGICA MANTIDA INTACTA ===============
+
+    def ao_mostrar(self):
+        self.caixa_log.delete("1.0", "end")
+        self.barra_progresso.set(0)
+        self.label_porcentagem.configure(text="0.00%")
+        self.atualizar_estatisticas("0.0 Mb/s", "0.0 Mb/s", "0.0 Mb/s")
+        self.botao_pausar.configure(state="normal", text="Pausar", fg_color="#C0C1BC")
+        self.botao_cancelar.configure(state="normal")
+        self.botao_voltar.configure(state="disabled")
+        self.flag_cancelar = False
+        self.evento_pausa.set()
+
+        servico = self.controller.dados_redutor.get("servico")
+        self.label_titulo.configure(text=f"Resk via {servico}")
+
+        thread = threading.Thread(target=self.iniciar_processamento)
+        thread.daemon = True
+        thread.start()
+
+    def voltar_inicio(self):
+        self.controller.mostrar_tela("TelaSelecao")
+
+    def escrever_log(self, mensagem):
+        self.after(0, self._inserir_texto, mensagem)
+
+    def _inserir_texto(self, mensagem):
+        self.caixa_log.insert("end", mensagem + "\n")
+        self.caixa_log.see("end")
+
+    def atualizar_progresso(self, valor_decimal, texto_porcentagem):
+        self.barra_progresso.set(valor_decimal)
+        self.label_porcentagem.configure(text=texto_porcentagem)
+
+    def atualizar_estatisticas(self, rede, maxima, armazenamento):
+        self.label_valor_rede.configure(text=rede)
+        self.label_valor_maxima.configure(text=maxima)
+        self.label_valor_armazenamento.configure(text=armazenamento)
+
+    def pausar_retomar(self):
+        if self.evento_pausa.is_set():
+            self.evento_pausa.clear()
+            self.botao_pausar.configure(text="Retomar", fg_color="#457297", hover_color="#576193", text_color="#FFFFFF")
+            self.escrever_log("\n[AVISO] Processo PAUSADO.")
+            self.label_status.configure(text="Processo Pausado", text_color="#B77849")
+        else:
+            self.evento_pausa.set()
+            self.botao_pausar.configure(text="Pausar", fg_color="#C0C1BC", hover_color="#A1A29D", text_color="#2C2D28")
+            self.escrever_log("\n[AVISO] Processo RETOMADO!")
+            self.label_status.configure(text="A transferir e processar...", text_color="#457297")
+
+    def cancelar_processo(self):
+        self.flag_cancelar = True
+        self.evento_pausa.set()
+        self.botao_cancelar.configure(state="disabled")
+        self.botao_pausar.configure(state="disabled")
+        self.escrever_log("\n[AVISO] A CANCELAR...")
+        self.label_status.configure(text="A cancelar operação...", text_color="#935A5E")
+
+    def pedir_codigo_2fa(self):
+        dialog = ctk.CTkInputDialog(text="Introduza o código de 6 dígitos:", title="Segurança Apple (2FA)")
+        return dialog.get_input()
+
+    def iniciar_processamento(self):
+        servico = self.controller.dados_redutor.get("servico")
+        email = self.controller.dados_redutor.get("email")
+        senha = self.controller.dados_redutor.get("senha")
+        pasta = self.controller.dados_redutor.get("pasta")
+
+        if servico == "iCloud":
+            self.processar_icloud(email, senha, pasta)
+        else:
+            self.escrever_log("Serviço (Google Fotos) em desenvolvimento!")
+            self.finalizar_ui("Serviço não implementado")
+
+    def processar_uma_foto(self, foto, pasta_reduzidas):
+        if self.flag_cancelar: return False, "Cancelado"
+        self.evento_pausa.wait()
+        if self.flag_cancelar: return False, "Cancelado"
+
+        nome_ficheiro = foto.filename
+        extensao = os.path.splitext(nome_ficheiro)[1].lower()
+        if extensao not in ('.jpg', '.jpeg', '.png', '.heic', '.bmp', '.webp', '.dng', '.cr2', '.cr3', '.nef', '.arw',
+                            '.rw2', '.orf', '.raf', '.raw'):
+            return True, f"{nome_ficheiro} (Ignorado - Formato não suportado)"
+
+        caminho_destino = os.path.join(pasta_reduzidas, f"{os.path.splitext(nome_ficheiro)[0]}.jpg")
+        if os.path.exists(caminho_destino): return True, f"{nome_ficheiro} (Já existia)"
+
+        try:
+            download = foto.download()
+            dados_brutos = ler_bytes_do_download(download)
+            if not dados_brutos: return False, f"{nome_ficheiro} (Erro: dados vazios)"
+
+            img = abrir_imagem_universal(dados_brutos, nome_ficheiro)
+            with img:
+                if img.mode in ("RGBA", "P", "CMYK"): img = img.convert("RGB")
+                img.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
+                img.save(caminho_destino, "JPEG", quality=80, optimize=True)
+            return True, nome_ficheiro
+        except Exception as e:
+            return False, f"{nome_ficheiro} (Erro: {e})"
+
+    def processar_icloud(self, email, senha, pasta_reduzidas):
+        try:
+            self.escrever_log("A ligar aos servidores da Apple...")
+            self.after(0, lambda: self.label_status.configure(text="A autenticar..."))
+
+            api = PyiCloudService(email, senha)
+            if api.requires_2fa:
+                codigo = self.pedir_codigo_2fa()
+                if not codigo or not api.validate_2fa_code(codigo):
+                    self.escrever_log("[ERRO] Falha no 2FA.")
+                    self.finalizar_ui("Erro de Autenticação")
+                    return
+                if not api.is_trusted_session: api.trust_session()
+
+            self.after(0, lambda: self.label_status.configure(text="A procurar mídia..."))
+            todas_as_fotos = api.photos.all
+            total_arquivos = len(todas_as_fotos)
+            if total_arquivos == 0:
+                self.escrever_log("[AVISO] Nenhum ficheiro encontrado no iCloud.")
+                self.finalizar_ui("Concluído (Vazio)")
+                return
+
+            self.escrever_log(f"Encontrados {total_arquivos} ficheiros. A iniciar processamento...\n")
+            self.after(0, lambda: self.label_status.configure(text="A processar os ficheiros..."))
+            os.makedirs(pasta_reduzidas, exist_ok=True)
+            sucessos, erros, processados = 0, 0, 0
+
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futuros = [executor.submit(self.processar_uma_foto, foto, pasta_reduzidas) for foto in todas_as_fotos]
+                for futuro in as_completed(futuros):
+                    if self.flag_cancelar:
+                        for f in futuros: f.cancel()
+                        break
+                    deu_certo, resultado = futuro.result()
+                    processados += 1
+
+                    porcentagem = (processados / total_arquivos) * 100
+                    self.after(0, self.atualizar_progresso, processados / total_arquivos, f"{porcentagem:.2f}%")
+
+                    if deu_certo:
+                        sucessos += 1
+                        self.escrever_log(f"[OK] {resultado}")
+                    else:
+                        erros += 1
+                        self.escrever_log(f"[ERRO] {resultado}")
+
+            if self.flag_cancelar:
+                self.escrever_log("OPERAÇÃO CANCELADA PELO USUÁRIO.")
+                self.finalizar_ui("Cancelado")
+            else:
+                self.escrever_log("PROCESSO RESK FINALIZADO COM SUCESSO!")
+                self.finalizar_ui("Otimização Concluída!")
+
+        except Exception as e:
+            self.escrever_log(f"[ERRO FATAL] {str(e)}")
+            self.finalizar_ui("Erro Fatal")
+
+    def finalizar_ui(self, status_texto="Finalizado"):
+        self.after(0, lambda: self.botao_pausar.configure(state="disabled"))
+        self.after(0, lambda: self.botao_cancelar.configure(state="disabled"))
+        self.after(0, lambda: self.botao_voltar.configure(state="normal"))
+        self.after(0, lambda: self.label_status.configure(text=status_texto))
+
+##### Arquivo: telas\tela_selecao.py #####
+import customtkinter as ctk
+from PIL import Image
+import os
+
+class TelaSelecao(ctk.CTkFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.configure(fg_color="transparent")
+
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=0) # Linha da Logo
+        self.grid_rowconfigure(2, weight=0) # Linha do Card
+        self.grid_rowconfigure(3, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # ==========================================
+        # LOGO PRINCIPAL
+        # ==========================================
+        try:
+            caminho_logo = "assets/resk.ico"
+            if os.path.exists(caminho_logo):
+                img_logo_pil = Image.open(caminho_logo)
+                # Tamanho ajustado para ficar idêntico ao seu print
+                logo_image = ctk.CTkImage(light_image=img_logo_pil, size=(110, 110))
+                self.label_logo = ctk.CTkLabel(self, text="", image=logo_image)
+                self.label_logo.grid(row=1, column=0, pady=(0, 20))
+        except Exception as e:
+            print(f"Aviso: Erro ao carregar a logo na tela de seleção: {e}")
+
+
+        # ==========================================
+        # CARD PRINCIPAL (Container)
+        # ==========================================
+        card = ctk.CTkFrame(self, width=450, height=500)
+        card.grid(row=2, column=0)
+        card.grid_propagate(False)
+        card.pack_propagate(False)
+
+        # Título principal com padding ajustado (sem o subtítulo acima)
+        ctk.CTkLabel(card, text="Qual serviço\ndeseja conectar?", font=("Helvetica", 32, "bold"), justify="center").pack(pady=(50, 40))
+
+        # Botões sem ícones, centralizados
+        btn_icloud = ctk.CTkButton(card, text="Apple iCloud", width=320, height=60,
+                                   font=("Helvetica", 16, "bold"), command=lambda: self.selecionar_servico("iCloud"))
+        btn_icloud.pack(pady=10)
+
+        btn_gphotos = ctk.CTkButton(card, text="Google Fotos", width=320, height=60,
+                                    font=("Helvetica", 16, "bold"), command=lambda: self.selecionar_servico("Google Fotos"))
+        btn_gphotos.pack(pady=10)
+
+
+    def selecionar_servico(self, servico):
+        self.controller.dados_redutor["servico"] = servico
+        self.controller.mostrar_tela("TelaLogin")
+
+##### Arquivo: tema_artemis.json #####
+{
+  "CTkFont": {
+    "macOS": {
+      "family": "Helvetica",
+      "size": 13,
+      "weight": "normal"
+    },
+    "Windows": {
+      "family": "Helvetica",
+      "size": 13,
+      "weight": "normal"
+    },
+    "Linux": {
+      "family": "Helvetica",
+      "size": 13,
+      "weight": "normal"
+    }
+  },
+  "CTk": {
+    "fg_color": ["#D9DAD3", "#D9DAD3"]
+  },
+  "CTkToplevel": {
+    "fg_color": ["#D9DAD3", "#D9DAD3"]
+  },
+  "CTkFrame": {
+    "corner_radius": 20,
+    "border_width": 0,
+    "fg_color": ["#F4F5EF", "#F4F5EF"],
+    "top_fg_color": ["#F4F5EF", "#F4F5EF"],
+    "border_color": ["#C0C1BC", "#C0C1BC"]
+  },
+  "CTkButton": {
+    "corner_radius": 25,
+    "border_width": 0,
+    "fg_color": ["#457297", "#457297"],
+    "hover_color": ["#576193", "#576193"],
+    "border_color": ["#FFFFFF", "#FFFFFF"],
+    "text_color": ["#FFFFFF", "#FFFFFF"],
+    "text_color_disabled": ["#9E9F9A", "#9E9F9A"]
+  },
+  "CTkLabel": {
+    "corner_radius": 0,
+    "fg_color": ["transparent", "transparent"],
+    "text_color": ["#2C2D28", "#2C2D28"]
+  },
+  "CTkEntry": {
+    "corner_radius": 10,
+    "border_width": 1,
+    "fg_color": ["#FFFFFF", "#FFFFFF"],
+    "border_color": ["#A1A29D", "#A1A29D"],
+    "text_color": ["#2C2D28", "#2C2D28"],
+    "placeholder_text_color": ["#7B7C77", "#7B7C77"]
+  },
+  "CTkTextbox": {
+    "corner_radius": 10,
+    "border_width": 1,
+    "fg_color": ["#FFFFFF", "#FFFFFF"],
+    "border_color": ["#A1A29D", "#A1A29D"],
+    "text_color": ["#2C2D28", "#2C2D28"],
+    "scrollbar_button_color": ["#D9DAD3", "#D9DAD3"],
+    "scrollbar_button_hover_color": ["#C0C1BC", "#C0C1BC"]
+  },
+  "CTkScrollbar": {
+    "corner_radius": 10,
+    "border_width": 0,
+    "border_spacing": 4,
+    "fg_color": ["transparent", "transparent"],
+    "button_color": ["#D9DAD3", "#D9DAD3"],
+    "button_hover_color": ["#C0C1BC", "#C0C1BC"]
+  },
+  "CTkProgressBar": {
+    "corner_radius": 6,
+    "border_width": 0,
+    "fg_color": ["#FFFFFF", "#FFFFFF"],
+    "progress_color": ["#B77849", "#B77849"],
+    "border_color": ["#B77849", "#B77849"]
+  }
+}
+
+##### Arquivo: utils.py #####
+import os
+import io
+import sys
+from PIL import Image
+from pillow_heif import register_heif_opener
+
+register_heif_opener()
+
+try:
+    import rawpy
+
+    RAWPY_DISPONIVEL = True
+except ImportError:
+    RAWPY_DISPONIVEL = False
+
+
+def validar_permissao_escrita(pasta):
+    arquivo_teste = os.path.join(pasta, ".teste_permissao_redutor")
+    try:
+        with open(arquivo_teste, 'w') as f:
+            f.write("ok")
+        os.remove(arquivo_teste)
+        return True
+    except Exception:
+        return False
+
+
+def ler_bytes_do_download(download):
+    if download is None: return None
+    if isinstance(download, (bytes, bytearray)): return bytes(download)
+    if hasattr(download, 'raw') and hasattr(download.raw, 'read'): return download.raw.read()
+    if hasattr(download, 'content'): return download.content
+    if hasattr(download, 'read'): return download.read()
+    return None
+
+
+def abrir_imagem_universal(dados_brutos, nome_ficheiro):
+    extensao = os.path.splitext(nome_ficheiro)[1].lower()
+    FORMATOS_RAW = {'.dng', '.cr2', '.cr3', '.nef', '.arw', '.rw2', '.orf', '.raf', '.raw'}
+
+    if extensao in FORMATOS_RAW:
+        if not RAWPY_DISPONIVEL:
+            raise ImportError("Formato RAW detectado mas 'rawpy' não está instalado.")
+        with rawpy.imread(io.BytesIO(dados_brutos)) as raw:
+            rgb_array = raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=False, output_bps=8)
+        return Image.fromarray(rgb_array)
+    else:
+        return Image.open(io.BytesIO(dados_brutos))
+
