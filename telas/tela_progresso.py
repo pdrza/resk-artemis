@@ -4,7 +4,11 @@ import customtkinter as ctk
 from PIL import Image
 from pyicloud import PyiCloudService
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from utils import RAWPY_DISPONIVEL, ler_bytes_do_download, abrir_imagem_universal
+from utils import ler_bytes_do_download, abrir_imagem_universal
+
+# Conjunto (set) tem busca O(1)
+FORMATOS_SUPORTADOS = {'.jpg', '.jpeg', '.png', '.heic', '.bmp', '.webp',
+                       '.dng', '.cr2', '.cr3', '.nef', '.arw', '.rw2', '.orf', '.raf', '.raw'}
 
 
 class TelaProgresso(ctk.CTkFrame):
@@ -25,42 +29,17 @@ class TelaProgresso(ctk.CTkFrame):
         card = ctk.CTkFrame(self)
         card.pack(fill="both", expand=True, padx=50, pady=(0, 50))
 
-        # ==========================================
-        # CONTADORES NO CANTO SUPERIOR DIREITO
-        # ==========================================
+        # Contadores no Canto
         self.frame_stats = ctk.CTkFrame(card, fg_color="transparent")
-        # Fixando no topo direito (anchor="ne") com margens internas (x e y)
         self.frame_stats.place(relx=1.0, rely=0.0, anchor="ne", x=-40, y=40)
-
         self.frame_stats.grid_columnconfigure((0, 1, 2), weight=1)
 
-        # REDE
-        self.label_titulo_rede = ctk.CTkLabel(self.frame_stats, text="REDE", font=("Helvetica", 11, "bold"),
-                                              text_color="#7B7C77")
-        self.label_titulo_rede.grid(row=0, column=0, padx=15, sticky="e")
-        self.label_valor_rede = ctk.CTkLabel(self.frame_stats, text="0.0 MB/s", font=("Helvetica", 14, "bold"),
-                                             text_color="#2C2D28")
-        self.label_valor_rede.grid(row=1, column=0, padx=15, sticky="e")
+        # Labels de Títulos e Valores da Rede/Armazenamento
+        self.label_valor_rede = self._criar_coluna_stats("REDE", 0)
+        self.label_valor_maxima = self._criar_coluna_stats("MÁXIMA", 1)
+        self.label_valor_armazenamento = self._criar_coluna_stats("ARMAZENAMENTO", 2)
 
-        # MÁXIMA
-        self.label_titulo_maxima = ctk.CTkLabel(self.frame_stats, text="MÁXIMA", font=("Helvetica", 11, "bold"),
-                                                text_color="#7B7C77")
-        self.label_titulo_maxima.grid(row=0, column=1, padx=15, sticky="e")
-        self.label_valor_maxima = ctk.CTkLabel(self.frame_stats, text="0.0 MB/s", font=("Helvetica", 14, "bold"),
-                                               text_color="#2C2D28")
-        self.label_valor_maxima.grid(row=1, column=1, padx=15, sticky="e")
-
-        # ARMAZENAMENTO
-        self.label_titulo_armazenamento = ctk.CTkLabel(self.frame_stats, text="ARMAZENAMENTO",
-                                                       font=("Helvetica", 11, "bold"), text_color="#7B7C77")
-        self.label_titulo_armazenamento.grid(row=0, column=2, padx=15, sticky="e")
-        self.label_valor_armazenamento = ctk.CTkLabel(self.frame_stats, text="0.0 MB/s", font=("Helvetica", 14, "bold"),
-                                                      text_color="#2C2D28")
-        self.label_valor_armazenamento.grid(row=1, column=2, padx=15, sticky="e")
-
-        # ==========================================
-        # ELEMENTOS CENTRAIS (Limpos e alinhados)
-        # ==========================================
+        # Elementos Centrais
         self.label_titulo = ctk.CTkLabel(card, text="Otimizando", font=("Helvetica", 32, "bold"))
         self.label_titulo.pack(pady=(70, 5))
 
@@ -78,24 +57,21 @@ class TelaProgresso(ctk.CTkFrame):
         self.frame_botoes = ctk.CTkFrame(card, fg_color="transparent")
         self.frame_botoes.pack(pady=10)
 
-        self.botao_pausar = ctk.CTkButton(self.frame_botoes, text="Pausar", width=140, height=45,
-                                          fg_color="#C0C1BC", hover_color="#A1A29D", text_color="#2C2D28",
-                                          font=("Helvetica", 14, "bold"),
+        self.botao_pausar = ctk.CTkButton(self.frame_botoes, text="Pausar", width=140, height=45, fg_color="#C0C1BC",
+                                          hover_color="#A1A29D", text_color="#2C2D28", font=("Helvetica", 14, "bold"),
                                           command=self.pausar_retomar)
         self.botao_pausar.grid(row=0, column=0, padx=15)
 
         self.botao_cancelar = ctk.CTkButton(self.frame_botoes, text="Cancelar", width=140, height=45,
-                                            fg_color="#935A5E", hover_color="#7A4B4E", text_color="#FFFFFF",
-                                            font=("Helvetica", 14, "bold"),
+                                            fg_color="#935A5E",
+                                            hover_color="#7A4B4E", text_color="#FFFFFF", font=("Helvetica", 14, "bold"),
                                             command=self.cancelar_processo)
         self.botao_cancelar.grid(row=0, column=1, padx=15)
 
         self.caixa_log = ctk.CTkTextbox(card, width=520, height=180, font=("Courier", 12))
         self.caixa_log.pack(pady=30)
 
-        # ==========================================
-        # VARIÁVEIS PARA CÁLCULO DE VELOCIDADE
-        # ==========================================
+        # Variáveis de Controle
         self.lock_stats = threading.Lock()
         self.total_bytes_rede = 0
         self.total_bytes_armazenamento = 0
@@ -104,49 +80,45 @@ class TelaProgresso(ctk.CTkFrame):
         self.velocidade_maxima = 0.0
         self.processando = False
 
-    # =============== LOOP DE ATUALIZAÇÃO DA UI ===============
-    def atualizar_loop(self):
-        if not self.processando:
-            return
+    def _criar_coluna_stats(self, titulo, coluna):
+        ctk.CTkLabel(self.frame_stats, text=titulo, font=("Helvetica", 11, "bold"), text_color="#7B7C77").grid(row=0,
+                                                                                                               column=coluna,
+                                                                                                               padx=15,
+                                                                                                               sticky="e")
+        lbl_valor = ctk.CTkLabel(self.frame_stats, text="0.0 MB/s", font=("Helvetica", 14, "bold"),
+                                 text_color="#2C2D28")
+        lbl_valor.grid(row=1, column=coluna, padx=15, sticky="e")
+        return lbl_valor
 
-        # Só calcula velocidade se o processo não estiver pausado
+    def atualizar_loop(self):
+        if not self.processando: return
+
         if self.evento_pausa.is_set():
             with self.lock_stats:
                 bytes_rede_agora = self.total_bytes_rede
                 bytes_arm_agora = self.total_bytes_armazenamento
 
-            # Calcula a diferença de bytes (o que foi processado em 1 segundo)
             diff_rede = bytes_rede_agora - self.last_bytes_rede
             diff_arm = bytes_arm_agora - self.last_bytes_armazenamento
 
             self.last_bytes_rede = bytes_rede_agora
             self.last_bytes_armazenamento = bytes_arm_agora
 
-            # Converte de Bytes para Megabytes por segundo (MB/s)
-            mbps_rede = diff_rede / (1024 * 1024)
-            mbps_arm = diff_arm / (1024 * 1024)
+            mbps_rede = diff_rede / 1048576  # 1024 * 1024
+            mbps_arm = diff_arm / 1048576
 
-            # Atualiza o pico máximo registrado
             if mbps_rede > self.velocidade_maxima:
                 self.velocidade_maxima = mbps_rede
 
-            self.atualizar_estatisticas(
-                f"{mbps_rede:.1f} MB/s",
-                f"{self.velocidade_maxima:.1f} MB/s",
-                f"{mbps_arm:.1f} MB/s"
-            )
+            self.atualizar_estatisticas(f"{mbps_rede:.1f} MB/s", f"{self.velocidade_maxima:.1f} MB/s",
+                                        f"{mbps_arm:.1f} MB/s")
         else:
-            # Se estiver pausado, iguala os rastreadores para não gerar um pico absurdo ao retomar
             with self.lock_stats:
                 self.last_bytes_rede = self.total_bytes_rede
                 self.last_bytes_armazenamento = self.total_bytes_armazenamento
-
             self.atualizar_estatisticas("0.0 MB/s", f"{self.velocidade_maxima:.1f} MB/s", "0.0 MB/s")
 
-        # Chama a função de novo em 1000ms (1 segundo)
         self.after(1000, self.atualizar_loop)
-
-    # =============== LÓGICA PRINCIPAL ===============
 
     def ao_mostrar(self):
         self.caixa_log.delete("1.0", "end")
@@ -159,24 +131,18 @@ class TelaProgresso(ctk.CTkFrame):
         self.flag_cancelar = False
         self.evento_pausa.set()
 
-        # Reseta as variáveis de velocidade
         with self.lock_stats:
-            self.total_bytes_rede = 0
-            self.total_bytes_armazenamento = 0
-            self.last_bytes_rede = 0
-            self.last_bytes_armazenamento = 0
+            self.total_bytes_rede = self.total_bytes_armazenamento = 0
+            self.last_bytes_rede = self.last_bytes_armazenamento = 0
             self.velocidade_maxima = 0.0
 
-        # Inicia o loop de interface visual
         self.processando = True
         self.atualizar_loop()
 
         servico = self.controller.dados_redutor.get("servico")
         self.label_titulo.configure(text=f"Resk via {servico}")
 
-        thread = threading.Thread(target=self.iniciar_processamento)
-        thread.daemon = True
-        thread.start()
+        threading.Thread(target=self.iniciar_processamento, daemon=True).start()
 
     def voltar_inicio(self):
         self.controller.mostrar_tela("TelaSelecao")
@@ -240,8 +206,7 @@ class TelaProgresso(ctk.CTkFrame):
 
         nome_ficheiro = foto.filename
         extensao = os.path.splitext(nome_ficheiro)[1].lower()
-        if extensao not in ('.jpg', '.jpeg', '.png', '.heic', '.bmp', '.webp', '.dng', '.cr2', '.cr3', '.nef', '.arw',
-                            '.rw2', '.orf', '.raf', '.raw'):
+        if extensao not in FORMATOS_SUPORTADOS:
             return True, f"{nome_ficheiro} (Ignorado - Formato não suportado)"
 
         caminho_destino = os.path.join(pasta_reduzidas, f"{os.path.splitext(nome_ficheiro)[0]}.jpg")
@@ -252,7 +217,6 @@ class TelaProgresso(ctk.CTkFrame):
             dados_brutos = ler_bytes_do_download(download)
             if not dados_brutos: return False, f"{nome_ficheiro} (Erro: dados vazios)"
 
-            # Adiciona o peso do download
             with self.lock_stats:
                 self.total_bytes_rede += len(dados_brutos)
 
@@ -262,7 +226,6 @@ class TelaProgresso(ctk.CTkFrame):
                 img.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
                 img.save(caminho_destino, "JPEG", quality=80, optimize=True)
 
-            # Adiciona o peso do arquivo processado no disco local
             with self.lock_stats:
                 self.total_bytes_armazenamento += os.path.getsize(caminho_destino)
 
@@ -287,6 +250,7 @@ class TelaProgresso(ctk.CTkFrame):
             self.after(0, lambda: self.label_status.configure(text="A procurar mídia..."))
             todas_as_fotos = api.photos.all
             total_arquivos = len(todas_as_fotos)
+
             if total_arquivos == 0:
                 self.escrever_log("[AVISO] Nenhum ficheiro encontrado no iCloud.")
                 self.finalizar_ui("Concluído (Vazio)")
@@ -310,10 +274,8 @@ class TelaProgresso(ctk.CTkFrame):
                     self.after(0, self.atualizar_progresso, processados / total_arquivos, f"{porcentagem:.2f}%")
 
                     if deu_certo:
-                        sucessos += 1
                         self.escrever_log(f"[OK] {resultado}")
                     else:
-                        erros += 1
                         self.escrever_log(f"[ERRO] {resultado}")
 
             if self.flag_cancelar:
@@ -328,7 +290,7 @@ class TelaProgresso(ctk.CTkFrame):
             self.finalizar_ui("Erro Fatal")
 
     def finalizar_ui(self, status_texto="Finalizado"):
-        self.processando = False  # Desliga o loop de velocidade
+        self.processando = False
         self.after(0, lambda: self.botao_pausar.configure(state="disabled"))
         self.after(0, lambda: self.botao_cancelar.configure(state="disabled"))
         self.after(0, lambda: self.botao_voltar.configure(state="normal"))

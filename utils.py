@@ -1,6 +1,5 @@
 import os
 import io
-import sys
 from PIL import Image
 from pillow_heif import register_heif_opener
 
@@ -8,11 +7,9 @@ register_heif_opener()
 
 try:
     import rawpy
-
     RAWPY_DISPONIVEL = True
 except ImportError:
     RAWPY_DISPONIVEL = False
-
 
 def validar_permissao_escrita(pasta):
     arquivo_teste = os.path.join(pasta, ".teste_permissao_redutor")
@@ -24,7 +21,6 @@ def validar_permissao_escrita(pasta):
     except Exception:
         return False
 
-
 def ler_bytes_do_download(download):
     if download is None: return None
     if isinstance(download, (bytes, bytearray)): return bytes(download)
@@ -32,7 +28,6 @@ def ler_bytes_do_download(download):
     if hasattr(download, 'content'): return download.content
     if hasattr(download, 'read'): return download.read()
     return None
-
 
 def abrir_imagem_universal(dados_brutos, nome_ficheiro):
     extensao = os.path.splitext(nome_ficheiro)[1].lower()
@@ -44,5 +39,4 @@ def abrir_imagem_universal(dados_brutos, nome_ficheiro):
         with rawpy.imread(io.BytesIO(dados_brutos)) as raw:
             rgb_array = raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=False, output_bps=8)
         return Image.fromarray(rgb_array)
-    else:
-        return Image.open(io.BytesIO(dados_brutos))
+    return Image.open(io.BytesIO(dados_brutos))

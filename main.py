@@ -1,21 +1,18 @@
 import sys
 import customtkinter as ctk
 
-class FalsoTerminal:
-    def write(self, *args, **kwargs): pass
-    def flush(self, *args, **kwargs): pass
-    def isatty(self): return False
-    def read(self, *args, **kwargs): return ""
-    def readline(self, *args, **kwargs): return ""
-
-if sys.stdout is None: sys.stdout = FalsoTerminal()
-if sys.stderr is None: sys.stderr = FalsoTerminal()
-if sys.stdin is None:  sys.stdin = FalsoTerminal()
-
 from telas.tela_selecao import TelaSelecao
 from telas.tela_login import TelaLogin
 from telas.tela_configuracao import TelaConfiguracao
 from telas.tela_progresso import TelaProgresso
+
+# Previne erros de stdout/stderr ao rodar o app compilado (sem console)
+class DummyTerminal:
+    def write(self, *args, **kwargs): pass
+    def flush(self, *args, **kwargs): pass
+
+if sys.stdout is None: sys.stdout = DummyTerminal()
+if sys.stderr is None: sys.stderr = DummyTerminal()
 
 ctk.set_default_color_theme("tema_artemis.json")
 ctk.set_appearance_mode("light")
@@ -26,14 +23,13 @@ class MainApp(ctk.CTk):
         self.title("Resk Artemis")
         self.geometry("700x850")
 
-        # ==========================================
-        # ÍCONE DO APLICATIVO (.ico)
-        # ==========================================
+        # Ícone
         try:
             self.iconbitmap("assets/resk.ico")
-        except Exception as e:
-            print(f"Aviso: Ícone não encontrado. Erro: {e}")
+        except Exception:
+            pass
 
+        # Dicionário de estado do app
         self.dados_redutor = {
             "servico": None, "email": "", "senha": "", "pasta": ""
         }
@@ -44,7 +40,6 @@ class MainApp(ctk.CTk):
         self.container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-
         for F in (TelaSelecao, TelaLogin, TelaConfiguracao, TelaProgresso):
             nome_pagina = F.__name__
             frame = F(parent=self.container, controller=self)

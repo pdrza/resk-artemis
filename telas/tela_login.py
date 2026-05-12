@@ -1,6 +1,5 @@
 import customtkinter as ctk
 
-
 class TelaLogin(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -11,35 +10,24 @@ class TelaLogin(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # Botão de voltar mais discreto e moderno
         ctk.CTkButton(self, text="← Voltar", width=60, fg_color="transparent", hover_color="#C0C1BC",
-                      text_color="#2C2D28",
-                      font=("Helvetica", 14), command=lambda: self.controller.mostrar_tela("TelaSelecao")).place(x=30,
-                                                                                                                 y=30)
+                      text_color="#2C2D28", font=("Helvetica", 14),
+                      command=lambda: self.controller.mostrar_tela("TelaSelecao")).place(x=30, y=30)
 
-        # Altura do card ajustada para 450 para manter simetria com a TelaSelecao
         card = ctk.CTkFrame(self, width=450, height=450)
         card.grid(row=1, column=0)
         card.pack_propagate(False)
 
-        # ==========================================
-        # CONTAINER DE ALINHAMENTO
-        # ==========================================
-        # Este frame transparente expande e centraliza o conteúdo no meio do card
         inner_frame = ctk.CTkFrame(card, fg_color="transparent")
         inner_frame.pack(expand=True)
 
-        # TEXTO "Autenticação Segura" REMOVIDO!
-
-        # Título principal (agora dentro do inner_frame)
         self.label_titulo = ctk.CTkLabel(inner_frame, text="Login", font=("Helvetica", 32, "bold"))
         self.label_titulo.pack(pady=(0, 30))
 
-        # Campos de texto (agora dentro do inner_frame)
-        self.entry_usuario = ctk.CTkEntry(inner_frame, placeholder_text="E-mail", width=340, height=50)
+        self.entry_usuario = ctk.CTkEntry(inner_frame, placeholder_text="E-mail iCloud", width=340, height=50)
         self.entry_usuario.pack(pady=(0, 15))
 
-        self.entry_senha = ctk.CTkEntry(inner_frame, placeholder_text="Senha", show="•", width=340, height=50)
+        self.entry_senha = ctk.CTkEntry(inner_frame, placeholder_text="Senha iCloud", show="•", width=340, height=50)
         self.entry_senha.pack(pady=(0, 5))
 
         self.label_mensagem = ctk.CTkLabel(inner_frame, text="", text_color="#935A5E", font=("Helvetica", 12))
@@ -60,6 +48,7 @@ class TelaLogin(ctk.CTkFrame):
             self.label_mensagem.configure(text="Por favor, preencha todos os campos.")
             return
 
+        # Credenciais salvas apenas na memória temporária para enviar direto para a API
         self.controller.dados_redutor["email"] = email
         self.controller.dados_redutor["senha"] = senha
         self.controller.mostrar_tela("TelaConfiguracao")
