@@ -32,9 +32,3 @@ Construído com uma interface gráfica moderna usando `customtkinter`, o aplicat
 * **Interface Gráfica:** [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter)
 * **Processamento de Imagem:** [Pillow](https://python-pillow.org/), [rawpy](https://pypi.org/project/rawpy/), [pillow-heif](https://pypi.org/project/pillow-heif/)
 * **Integração de Nuvem:** [PyiCloud](https://github.com/picklepete/pyicloud)
-* **Banco de Dados:** PostgreSQL (via `psycopg2`) para autenticação de usuários (módulo `auth.py`).
-
-### 1. Clone o repositório
-```bash
-git clone [https://github.com/seu-usuario/resk-artemis.git](https://github.com/seu-usuario/resk-artemis.git)
-cd resk-artemis
