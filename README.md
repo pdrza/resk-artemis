@@ -34,11 +34,6 @@ Construído com uma interface gráfica moderna usando `customtkinter`, o aplicat
 * **Integração de Nuvem:** [PyiCloud](https://github.com/picklepete/pyicloud)
 * **Banco de Dados:** PostgreSQL (via `psycopg2`) para autenticação de usuários (módulo `auth.py`).
 
-## 🚀 Como Instalar e Executar
-
-### Pré-requisitos
-Certifique-se de ter o Python instalado na sua máquina e, se planeja utilizar a integração com banco de dados, tenha um servidor PostgreSQL rodando localmente ou na nuvem.
-
 ### 1. Clone o repositório
 ```bash
 git clone [https://github.com/seu-usuario/resk-artemis.git](https://github.com/seu-usuario/resk-artemis.git)
